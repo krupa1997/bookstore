@@ -1,0 +1,1072 @@
+openapi: 3.0.3
+info:
+  title: E-Commerce Book Platform API
+  description: >
+    Production-ready OpenAPI specification for the e-commerce book browsing and purchasing platform.
+    Covers Member Auth, Catalog & Recommendations, Shopping Cart, Orders, Payments, and Shipping modules.
+  version: 1.0.0
+servers:
+  - url: https://api.bookstore.example.com/v1
+    description: Production Server
+  - url: https://staging-api.bookstore.example.com/v1
+    description: Staging / Sandbox Server
+
+tags:
+  - name: Auth & Member
+    description: User registration, authentication, profile, addresses, and entitlements.
+  - name: Store Management
+    description: Store creation, policy configuration, and catalog assignments.
+  - name: Catalog & Recommendations
+    description: Categories, brands/publishers, product details, delivery estimation, and recommendations (upsell/cross-sell).
+  - name: Cart & Basket
+    description: Manage cart items, quantities, and coupon/points applications.
+  - name: Orders
+    description: Order checkout, history, "Buy Again", cancellation (within 48h window), and returns.
+  - name: Payments & Wallet
+    description: Payment initiation, gateway confirmation, refund processing, and gift/wallet points redemption.
+  - name: Shipping & Fulfillment
+    description: Shipping rate calculation, tentative delivery estimation, and return shipments.
+
+paths:
+  # =========================================================================
+  # AUTH & MEMBER
+  # =========================================================================
+  /auth/register:
+    post:
+      tags: [Auth & Member]
+      summary: Register a new user
+      operationId: registerUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: User successfully registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/login:
+    post:
+      tags: [Auth & Member]
+      summary: User authentication (Registered / Guest to Auth)
+      operationId: loginUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/logout:
+    post:
+      tags: [Auth & Member]
+      summary: Logout active session
+      operationId: logoutUser
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          description: Successfully logged out
+
+  /members/me/addresses:
+    get:
+      tags: [Auth & Member]
+      summary: Get user saved delivery addresses
+      operationId: getUserAddresses
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of saved addresses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Address'
+    post:
+      tags: [Auth & Member]
+      summary: Add new delivery address
+      operationId: addAddress
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddressInput'
+      responses:
+        '201':
+          description: Address created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Address'
+
+  # =========================================================================
+  # CATALOG & BROWSING
+  # =========================================================================
+  /catalog/categories:
+    get:
+      tags: [Catalog & Recommendations]
+      summary: List all product categories
+      operationId: getCategories
+      parameters:
+        - name: storeId
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Categories retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Category'
+
+  /catalog/brands:
+    get:
+      tags: [Catalog & Recommendations]
+      summary: Browse brands / publishers / authors
+      operationId: getBrands
+      parameters:
+        - name: categoryId
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Brands/publishers list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Brand'
+
+  /catalog/products:
+    get:
+      tags: [Catalog & Recommendations]
+      summary: Browse and search products with filters
+      operationId: getProducts
+      parameters:
+        - name: categoryId
+          in: query
+          schema:
+            type: string
+        - name: brandId
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Paginated product list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductPagination'
+
+  /catalog/products/{productId}:
+    get:
+      tags: [Catalog & Recommendations]
+      summary: Get product details with tentative delivery date
+      operationId: getProductById
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: postalCode
+          in: query
+          description: Postal code to calculate tentative delivery date
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Detailed product view
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductDetail'
+        '404':
+          $ref: '#/components/schemas/ErrorResponse'
+
+  /catalog/products/{productId}/related:
+    get:
+      tags: [Catalog & Recommendations]
+      summary: Get related products (upsell & cross-sell)
+      operationId: getRelatedProducts
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [upsell, cross_sell, all]
+            default: all
+      responses:
+        '200':
+          description: Related products list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Product'
+
+  /catalog/recommendations:
+    get:
+      tags: [Catalog & Recommendations]
+      summary: Get personalized recommendations based on order history
+      operationId: getRecommendations
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Personalized recommended products
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Product'
+
+  # =========================================================================
+  # CART & BASKET
+  # =========================================================================
+  /cart:
+    get:
+      tags: [Cart & Basket]
+      summary: Get current active cart
+      operationId: getCart
+      security:
+        - BearerAuth: []
+        - GuestCartToken: []
+      responses:
+        '200':
+          description: Cart details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+    post:
+      tags: [Cart & Basket]
+      summary: Add product(s) to basket
+      operationId: addToCart
+      security:
+        - BearerAuth: []
+        - GuestCartToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddToCartRequest'
+      responses:
+        '200':
+          description: Updated cart
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+
+  /cart/items/{itemId}:
+    put:
+      tags: [Cart & Basket]
+      summary: Update quantity of an item in cart
+      operationId: updateCartItem
+      security:
+        - BearerAuth: []
+        - GuestCartToken: []
+      parameters:
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [quantity]
+              properties:
+                quantity:
+                  type: integer
+                  minimum: 1
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+    delete:
+      tags: [Cart & Basket]
+      summary: Remove item from cart
+      operationId: removeCartItem
+      security:
+        - BearerAuth: []
+        - GuestCartToken: []
+      parameters:
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+
+  # =========================================================================
+  # ORDERS & CHECKOUT
+  # =========================================================================
+  /orders/checkout:
+    post:
+      tags: [Orders]
+      summary: Initiate checkout from cart
+      operationId: checkoutOrder
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckoutRequest'
+      responses:
+        '201':
+          description: Order draft created ready for payment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+
+  /orders:
+    get:
+      tags: [Orders]
+      summary: Retrieve order history
+      operationId: getOrderHistory
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: List of user orders
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderHistoryResponse'
+
+  /orders/{orderId}:
+    get:
+      tags: [Orders]
+      summary: Get order details
+      operationId: getOrderById
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Order confirmation details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+
+  /orders/{orderId}/cancel:
+    post:
+      tags: [Orders]
+      summary: Cancel order within the 48-hour cancellation window
+      operationId: cancelOrder
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelOrderRequest'
+      responses:
+        '200':
+          description: Order successfully cancelled & refund initiated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '400':
+          description: Cancellation window expired (>48 hours) or invalid state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /orders/{orderId}/buy-again:
+    post:
+      tags: [Orders]
+      summary: Re-add items from previous order to cart ("Buy It Again")
+      operationId: buyItAgain
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Items re-added to active cart
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+
+  /orders/{orderId}/returns:
+    post:
+      tags: [Orders]
+      summary: Request return for order or items
+      operationId: requestOrderReturn
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReturnRequest'
+      responses:
+        '201':
+          description: Return shipment initiated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReturnResponse'
+
+  # =========================================================================
+  # PAYMENT & WALLET
+  # =========================================================================
+  /payments/initiate:
+    post:
+      tags: [Payments & Wallet]
+      summary: Initiate payment for an order with selected option
+      operationId: initiatePayment
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InitiatePaymentRequest'
+      responses:
+        '200':
+          description: Payment session created with gateway details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentSession'
+
+  /payments/confirm:
+    post:
+      tags: [Payments & Wallet]
+      summary: Confirm payment completion from gateway callback
+      operationId: confirmPayment
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmPaymentRequest'
+      responses:
+        '200':
+          description: Payment confirmed and order finalized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentConfirmation'
+
+  /payments/wallet:
+    get:
+      tags: [Payments & Wallet]
+      summary: Get user wallet balance and gift points
+      operationId: getWallet
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Wallet and gift points balance
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletBalance'
+
+  /payments/wallet/redeem-points:
+    post:
+      tags: [Payments & Wallet]
+      summary: Redeem gift points / coupons for order discount
+      operationId: redeemGiftPoints
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RedeemPointsRequest'
+      responses:
+        '200':
+          description: Points applied to checkout order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscountSummary'
+
+  # =========================================================================
+  # SHIPPING & FULFILLMENT
+  # =========================================================================
+  /shipping/calculate-rate:
+    post:
+      tags: [Shipping & Fulfillment]
+      summary: Calculate shipping rate and estimate delivery time
+      operationId: calculateShipping
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShippingRateRequest'
+      responses:
+        '200':
+          description: Shipping rate options and tentative delivery dates
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShippingRateResponse'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    GuestCartToken:
+      type: apiKey
+      in: header
+      name: X-Guest-Cart-Token
+
+  schemas:
+    # ---------------- Auth & Member Models ----------------
+    RegisterRequest:
+      type: object
+      required: [email, password, firstName, lastName]
+      properties:
+        email:
+          type: string
+          format: email
+          example: customer@example.com
+        password:
+          type: string
+          format: password
+          minLength: 8
+        firstName:
+          type: string
+          example: Jane
+        lastName:
+          type: string
+          example: Doe
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          example: customer@example.com
+        password:
+          type: string
+          format: password
+
+    AuthResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        tokenType:
+          type: string
+          example: Bearer
+        expiresIn:
+          type: integer
+          example: 3600
+        user:
+          $ref: '#/components/schemas/UserProfile'
+
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        roles:
+          type: array
+          items:
+            type: string
+            example: customer
+
+    Address:
+      type: object
+      properties:
+        id:
+          type: string
+        street:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        postalCode:
+          type: string
+        country:
+          type: string
+        isDefault:
+          type: boolean
+
+    AddressInput:
+      type: object
+      required: [street, city, state, postalCode, country]
+      properties:
+        street:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        postalCode:
+          type: string
+        country:
+          type: string
+        isDefault:
+          type: boolean
+
+    # ---------------- Catalog Models ----------------
+    Category:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+          example: Fiction
+        description:
+          type: string
+        slug:
+          type: string
+
+    Brand:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+          example: Penguin Random House
+        type:
+          type: string
+          enum: [publisher, author, brand]
+
+    Product:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+          example: The Great Gatsby
+        author:
+          type: string
+          example: F. Scott Fitzgerald
+        category:
+          $ref: '#/components/schemas/Category'
+        brand:
+          $ref: '#/components/schemas/Brand'
+        price:
+          type: number
+          format: float
+          example: 15.99
+        currency:
+          type: string
+          example: USD
+        coverImageUrl:
+          type: string
+        inStock:
+          type: boolean
+
+    ProductDetail:
+      allOf:
+        - $ref: '#/components/schemas/Product'
+        - type: object
+          properties:
+            isbn:
+              type: string
+            description:
+              type: string
+            pageCount:
+              type: integer
+            tentativeDeliveryDate:
+              type: string
+              format: date
+              example: "2025-04-10"
+
+    ProductPagination:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Product'
+        total:
+          type: integer
+        page:
+          type: integer
+        totalPages:
+          type: integer
+
+    # ---------------- Cart Models ----------------
+    AddToCartRequest:
+      type: object
+      required: [productId, quantity]
+      properties:
+        productId:
+          type: string
+        quantity:
+          type: integer
+          minimum: 1
+          default: 1
+
+    CartItem:
+      type: object
+      properties:
+        id:
+          type: string
+        product:
+          $ref: '#/components/schemas/Product'
+        quantity:
+          type: integer
+        unitPrice:
+          type: number
+        totalPrice:
+          type: number
+
+    Cart:
+      type: object
+      properties:
+        cartId:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CartItem'
+        subtotal:
+          type: number
+        discount:
+          type: number
+        total:
+          type: number
+
+    # ---------------- Order Models ----------------
+    CheckoutRequest:
+      type: object
+      required: [deliveryAddressId, shippingMethodId]
+      properties:
+        deliveryAddressId:
+          type: string
+        shippingMethodId:
+          type: string
+        couponCode:
+          type: string
+        redeemGiftPoints:
+          type: integer
+          description: Points to redeem for price deduction
+
+    Order:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum: [PENDING_PAYMENT, CONFIRMED, SHIPPED, DELIVERED, CANCELLED, RETURNED]
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CartItem'
+        deliveryAddress:
+          $ref: '#/components/schemas/Address'
+        subtotal:
+          type: number
+        discountAmount:
+          type: number
+        shippingAmount:
+          type: number
+        totalAmount:
+          type: number
+        canCancelUntil:
+          type: string
+          format: date-time
+          description: Timestamp representing 48 hours from order placement
+        createdAt:
+          type: string
+          format: date-time
+
+    OrderHistoryResponse:
+      type: object
+      properties:
+        orders:
+          type: array
+          items:
+            $ref: '#/components/schemas/Order'
+        total:
+          type: integer
+        page:
+          type: integer
+
+    CancelOrderRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          example: "Bought by mistake"
+
+    ReturnRequest:
+      type: object
+      required: [reason, itemIds]
+      properties:
+        reason:
+          type: string
+        itemIds:
+          type: array
+          items:
+            type: string
+
+    ReturnResponse:
+      type: object
+      properties:
+        returnId:
+          type: string
+        orderId:
+          type: string
+        status:
+          type: string
+          enum: [RETURN_REQUESTED, PICKUP_SCHEDULED, REFUND_PROCESSING, COMPLETED]
+        returnShipmentTrackingNumber:
+          type: string
+
+    # ---------------- Payment Models ----------------
+    InitiatePaymentRequest:
+      type: object
+      required: [orderId, paymentMethod]
+      properties:
+        orderId:
+          type: string
+        paymentMethod:
+          type: string
+          enum: [CREDIT_CARD, DEBIT_CARD, WALLET, GIFT_CARD, UPI, NET_BANKING]
+        walletRedemptionAmount:
+          type: number
+
+    PaymentSession:
+      type: object
+      properties:
+        paymentId:
+          type: string
+        orderId:
+          type: string
+        amount:
+          type: number
+        currency:
+          type: string
+        gatewayRedirectUrl:
+          type: string
+        paymentStatus:
+          type: string
+          enum: [INITIATED, REQUIRES_ACTION]
+
+    ConfirmPaymentRequest:
+      type: object
+      required: [paymentId, gatewayTransactionId, status]
+      properties:
+        paymentId:
+          type: string
+        gatewayTransactionId:
+          type: string
+        status:
+          type: string
+          enum: [SUCCESS, FAILED]
+
+    PaymentConfirmation:
+      type: object
+      properties:
+        paymentId:
+          type: string
+        orderId:
+          type: string
+        status:
+          type: string
+          enum: [PAID, FAILED]
+        transactionTimestamp:
+          type: string
+          format: date-time
+
+    WalletBalance:
+      type: object
+      properties:
+        walletAmount:
+          type: number
+          example: 120.50
+        giftPoints:
+          type: integer
+          example: 500
+        pointsValueCurrency:
+          type: number
+          example: 5.00
+
+    RedeemPointsRequest:
+      type: object
+      required: [pointsToRedeem]
+      properties:
+        pointsToRedeem:
+          type: integer
+          minimum: 1
+
+    DiscountSummary:
+      type: object
+      properties:
+        pointsRedeemed:
+          type: integer
+        discountAmount:
+          type: number
+        newCartTotal:
+          type: number
+
+    # ---------------- Shipping Models ----------------
+    ShippingRateRequest:
+      type: object
+      required: [deliveryPostalCode, cartId]
+      properties:
+        deliveryPostalCode:
+          type: string
+        cartId:
+          type: string
+
+    ShippingRateResponse:
+      type: object
+      properties:
+        options:
+          type: array
+          items:
+            type: object
+            properties:
+              shippingMethodId:
+                type: string
+                example: standard-ground
+              name:
+                type: string
+                example: Standard Shipping
+              cost:
+                type: number
+                example: 4.99
+              tentativeDeliveryDate:
+                type: string
+                format: date
+                example: "2025-04-10"
+
+    # ---------------- Error Model ----------------
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: string
+          example: VALIDATION_ERROR
+        message:
+          type: string
+          example: The requested action could not be completed.
+        timestamp:
+          type: string
+          format: date-time
